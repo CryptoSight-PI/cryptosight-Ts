@@ -10,6 +10,11 @@ Este módulo faz parte do ecossistema de monitoramento **CryptoSight NOC**. Ele 
 
 ## 🏗️ Estrutura da Chave no Redis
 
+{
+  "macAddress": "AA:BB:CC:DD:EE:FF",
+  "ipAddress": "192.168.1.50"
+}
+
 | Chave | Tipo | Valor | TTL | Descrição |
 | :--- | :--- | :--- | :--- | :--- |
 | `device:mac:<MAC_ADDRESS>` | String | `<IP_ADDRESS>` | 21.600s (6h) | Mapeamento dinâmico de rede local |
