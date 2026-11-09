@@ -10,7 +10,7 @@ const pool = mysql.createPool({
 })
 
 const redis = new Redis({
-  host: 'localhost',
+  host: process.env.DB_HOST_REDIS || 'localhost',
   port: 6379,
 })
 
@@ -19,11 +19,11 @@ export const app = new Elysia()
     const { macAddress, ipAddress } = body
 
     try {
-const [rows]: any = await pool.execute(
-  'SELECT id FROM dispositivos WHERE mac_address = ? LIMIT 1',
-  [macAddress]
-)
- 
+      const [rows]: any = await pool.execute(
+        'SELECT id FROM dispositivos WHERE mac_address = ? LIMIT 1',
+        [macAddress]
+      )
+
       if (rows.length === 0) {
         set.status = 404
         return {
@@ -32,9 +32,17 @@ const [rows]: any = await pool.execute(
         }
       }
 
-
-
       const redisKey = `device:mac:${macAddress}`
+
+      const currentIp = await redis.get(redisKey)
+      if (ipAddress === currentIp) {
+        await redis.expire(redisKey, 21600)
+
+        return {
+          success: true,
+          message: 'IP já está atualizado.',
+        }
+      }
 
       await redis.set(redisKey, ipAddress, 'EX', 21600)
 
@@ -54,9 +62,6 @@ const [rows]: any = await pool.execute(
       macAddress: t.String({
         pattern: '^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
       }),
-      ipAddress: t.String({ format: 'ipv4' }) 
+      ipAddress: t.String({ format: 'ipv4' })
     })
   })
-  .listen(3000)
-
-console.log(`A aplicação está rodando! ${app.server?.hostname}:${app.server?.port}`)
