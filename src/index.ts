@@ -1,5 +1,13 @@
+import mysql from 'mysql2/promise'
 import { Elysia, t } from 'elysia'
 import Redis from 'ioredis'
+
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+})
 
 const redis = new Redis({
   host: 'localhost',
@@ -7,10 +15,25 @@ const redis = new Redis({
 })
 
 export const app = new Elysia()
-  .post('/api/v1/device/register', async ({ body, set }) => {
+  .post('/api/v1/dispositivo/cadastro', async ({ body, set }) => {
     const { macAddress, ipAddress } = body
 
     try {
+const [rows]: any = await pool.execute(
+  'SELECT id FROM dispositivos WHERE mac_address = ? LIMIT 1',
+  [macAddress]
+)
+ 
+      if (rows.length === 0) {
+        set.status = 404
+        return {
+          success: false,
+          error: 'Dispositivo não cadastrado',
+        }
+      }
+
+
+
       const redisKey = `device:mac:${macAddress}`
 
       await redis.set(redisKey, ipAddress, 'EX', 21600)
@@ -28,7 +51,9 @@ export const app = new Elysia()
     }
   }, {
     body: t.Object({
-      macAddress: t.String({ minLength: 10 }),
+      macAddress: t.String({
+        pattern: '^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
+      }),
       ipAddress: t.String({ format: 'ipv4' }) 
     })
   })
