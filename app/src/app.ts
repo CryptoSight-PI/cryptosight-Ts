@@ -2,6 +2,8 @@ import mysql from 'mysql2/promise'
 import { Elysia, t } from 'elysia'
 import Redis from 'ioredis'
 
+const TTL_ONLINE_SEGUNDOS = Number(process.env.TTL_ONLINE_SEGUNDOS ?? 90)
+
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -10,21 +12,63 @@ const pool = mysql.createPool({
 })
 
 const redis = new Redis({
-  host: process.env.DB_HOST_REDIS || 'localhost',
-  port: 6379,
+  host: process.env.REDIS_HOST ?? 'localhost',
+  port: Number(process.env.REDIS_PORT ?? 6379),
 })
+
+redis.on('error', (err) => console.error('Erro no Redis:', err))
+async function buscarMaquina(macAddress: string) {
+  const [rows]: any = await pool.execute(
+    `SELECT m.id, m.mac_address, e.id AS id_empresa
+       FROM maquina m
+       JOIN sessao s ON s.id = m.id_sessao
+       JOIN farm f ON f.id = s.id_farm
+       JOIN empresa e ON e.id = f.id_empresa
+      WHERE m.mac_address = ?
+      LIMIT 1`,
+    [macAddress]
+  )
+
+  if (rows.length === 0) {
+    return null
+  }
+
+  return {
+    id: rows[0].id,
+    macAddress: rows[0].mac_address,
+    idEmpresa: rows[0].id_empresa,
+  }
+}
+
+async function salvarColeta(
+  idMaquina: number,
+  latenciaMs: number | null,
+  jitterMs: number | null,
+  perdaPct: number
+) {
+  await pool.execute(
+    'INSERT INTO coleta_rede (id_maquina, latencia_ms, jitter_ms, perda_pct) VALUES (?, ?, ?, ?)',
+    [idMaquina, latenciaMs, jitterMs, perdaPct]
+  )
+}
+
+async function salvarStatus(macAddress: string, status: object) {
+  const chave = `device:status:${macAddress}`
+  const valor = JSON.stringify(status)
+
+  await redis.set(chave, valor, 'EX', TTL_ONLINE_SEGUNDOS)
+}
+
 
 export const app = new Elysia()
   .post('/api/v1/dispositivo/cadastro', async ({ body, set }) => {
-    const { macAddress, ipAddress } = body
+    const { macAddress, ipAddress, latenciaMs, jitterMs, perdaPct } = body
 
     try {
-      const [rows]: any = await pool.execute(
-        'SELECT id FROM dispositivos WHERE mac_address = ? LIMIT 1',
-        [macAddress]
-      )
 
-      if (rows.length === 0) {
+      const maquina = await buscarMaquina(macAddress)
+
+      if (maquina === null) {
         set.status = 404
         return {
           success: false,
@@ -32,36 +76,37 @@ export const app = new Elysia()
         }
       }
 
-      const redisKey = `device:mac:${macAddress}`
+      await salvarColeta(maquina.id, latenciaMs, jitterMs, perdaPct)
 
-      const currentIp = await redis.get(redisKey)
-      if (ipAddress === currentIp) {
-        await redis.expire(redisKey, 21600)
-
-        return {
-          success: true,
-          message: 'IP já está atualizado.',
-        }
-      }
-
-      await redis.set(redisKey, ipAddress, 'EX', 21600)
+      await salvarStatus(maquina.macAddress, {
+        ip: ipAddress,
+        latenciaMs,
+        jitterMs,
+        perdaPct,
+        ultimoContato: new Date().toISOString(),
+      })
 
       return {
         success: true,
-        message: `O ip IP ${ipAddress} foi atribuido ao MAC ${macAddress} com sucesso! `,
+        idEmpresa: maquina.idEmpresa,
+        message: `O IP ${ipAddress} foi atribuído ao MAC ${maquina.macAddress} com sucesso!`,
       }
     } catch (error) {
+      console.error('Erro ao registrar dispositivo:', error)
       set.status = 500
       return {
         success: false,
-        error: 'Erro ao gravar valores no banco',
+        error: 'Erro interno ao registrar dispositivo',
       }
     }
   }, {
     body: t.Object({
       macAddress: t.String({
-        pattern: '^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
+        pattern: '^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$',
       }),
-      ipAddress: t.String({ format: 'ipv4' })
-    })
+      ipAddress: t.String({ format: 'ipv4' }),
+      latenciaMs: t.Union([t.Number({ minimum: 0 }), t.Null()]),
+      jitterMs: t.Union([t.Number({ minimum: 0 }), t.Null()]),
+      perdaPct: t.Number({ minimum: 0, maximum: 100 }),
+    }),
   })
