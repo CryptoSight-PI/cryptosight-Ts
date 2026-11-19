@@ -17,16 +17,25 @@ const redis = new Redis({
 })
 
 redis.on('error', (err) => console.error('Erro no Redis:', err))
+type MaquinaRow = {
+  id: number
+  mac_address: string
+  id_empresa: number
+}
+
 async function buscarMaquina(macAddress: string) {
-  const [rows]: any = await pool.execute(
+  // Normalize MAC to uppercase for a case-insensitive lookup
+  const macUpper = macAddress.toUpperCase()
+
+  const [rows] = await pool.execute<MaquinaRow[]>(
     `SELECT m.id, m.mac_address, e.id AS id_empresa
        FROM maquina m
        JOIN sessao s ON s.id = m.id_sessao
        JOIN farm f ON f.id = s.id_farm
        JOIN empresa e ON e.id = f.id_empresa
-      WHERE m.mac_address = ?
+      WHERE UPPER(m.mac_address) = ?
       LIMIT 1`,
-    [macAddress]
+    [macUpper]
   )
 
   if (rows.length === 0) {
@@ -52,7 +61,7 @@ async function salvarColeta(
   )
 }
 
-async function salvarStatus(macAddress: string, status: object) {
+async function salvarStatus(macAddress: string, status: Record<string, unknown>) {
   const chave = `device:status:${macAddress}`
   const valor = JSON.stringify(status)
 
