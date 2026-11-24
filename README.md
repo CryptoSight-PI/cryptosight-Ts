@@ -5,11 +5,11 @@ Descrição
 
 Visão técnica rápida
 - Runtime: `bun` (não Node). Use bun para instalar, executar e testar.
-- Entrypoint: `app/src/index.ts` (inicia o servidor em porta 3000).
-- Lógica principal: `app/src/app.ts` (validação, consultas MySQL, gravações Redis).
-- Testes: `app/src/app.test.ts` — servem como especificação comportamental e devem ser consultados para entender expectativas.
+- Entrypoint: `src/index.ts` (inicia o servidor em porta 3000).
+- Lógica principal: `src/app.ts` (validação, consultas MySQL, gravações Redis).
+- Testes: `src/app.test.ts` — servem como especificação comportamental e devem ser consultados para entender expectativas.
 
-Comandos essenciais (executar dentro de `app/`)
+Comandos essenciais (executar na raiz do repositório)
 - Instalar dependências: `bun install`
 - Servidor de desenvolvimento com watch: `bun run --watch src/index.ts`
 - Executar testes: `bun test`
@@ -29,7 +29,7 @@ Variáveis de ambiente importantes
 Chaves Redis e formato (fonte: código)
 - `device:status:<MAC>` — valor é uma string JSON com campos: `ip`, `latenciaMs`, `jitterMs`, `perdaPct`, `downloadMbps`, `uploadMbps`, `ultimoContato`. Gravada com `EX = TTL_ONLINE_SEGUNDOS`.
 - `device:lastip:<MAC>` — último IP conhecido; gravado sem expiração quando `status.ip` está presente.
-- Observação: o `app/README.md` contém informação desatualizada (por exemplo, TTL de 6 horas). Priorize código e testes.
+-- Observação: o `README.md` antigo no diretório app/ estava desatualizado; priorize código e testes.
 
 Testes e armadilhas comuns
 - Os testes fazem mock de `mysql2/promise` e `ioredis` antes de importar `./app`. Ao criar novos testes, coloque mocks antes do import para evitar carregar dependências reais.
@@ -42,9 +42,9 @@ TypeScript e mysql2
 - Prefira correções locais e mínimas para não propagar mudanças sob as configurações estritas do TypeScript.
 
 Onde olhar primeiro ao investigar
-- `app/src/app.test.ts` — descreve o comportamento esperado e exemplos de payloads válidos.
-- `app/src/app.ts` — implementação e chaves/TTL definitivos.
-- `app/package.json` e `app/Dockerfile` — comandos exatos de execução e instalação.
+-- `src/app.test.ts` — descreve o comportamento esperado e exemplos de payloads válidos.
+-- `src/app.ts` — implementação e chaves/TTL definitivos.
+-- `package.json` e `Dockerfile` — comandos exatos de execução e instalação.
 
 Observações finais
 - Não há workflow de CI no repositório raiz; a verificação local é a maneira primária para validar mudanças.
