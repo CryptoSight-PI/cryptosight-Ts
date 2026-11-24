@@ -1,8 +1,11 @@
-# Ignore agents files created by OpenCode agents
-AGENTS.md
-app/AGENTS.md
-
-# Node/Bun typical ignores
 node_modules/
-dist/
 .env
+dist/
+*.log
+.vscode/
+.idea/
+coverage/
+/.DS_Store
+
+# Ignore nested node_modules left in app/ after flattening
+app/node_modules/
