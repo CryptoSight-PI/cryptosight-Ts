@@ -33,8 +33,6 @@ Chaves Redis e formato (fonte: código)
 
 Testes e armadilhas comuns
 - Os testes fazem mock de `mysql2/promise` e `ioredis` antes de importar `./app`. Ao criar novos testes, coloque mocks antes do import para evitar carregar dependências reais.
-- Os testes verificam chamadas exatas a `pool.execute` e `redis.set` (argumentos, ordem, TTL). Alterações em nomes de chaves, TTL ou na ordem de parâmetros exigem atualização dos testes.
-- Os testes usam `bun:test` — não use Jest/Mocha para esse projeto.
 
 TypeScript e mysql2
 - `tsconfig.json` está em modo estrito (`"strict": true`) e inclui `types: ["bun-types"]`.
