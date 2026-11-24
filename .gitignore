@@ -1,0 +1,8 @@
+# Ignore agents files created by OpenCode agents
+AGENTS.md
+app/AGENTS.md
+
+# Node/Bun typical ignores
+node_modules/
+dist/
+.env

@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise'
+import type { RowDataPacket } from 'mysql2/promise'
 import { Elysia, t } from 'elysia'
 import Redis from 'ioredis'
 
@@ -17,7 +18,7 @@ const redis = new Redis({
 })
 
 redis.on('error', (err) => console.error('Erro no Redis:', err))
-type MaquinaRow = {
+type MaquinaRow = RowDataPacket & {
   id: number
   mac_address: string
   id_empresa: number
@@ -53,11 +54,13 @@ async function salvarColeta(
   idMaquina: number,
   latenciaMs: number | null,
   jitterMs: number | null,
-  perdaPct: number
+  perdaPct: number,
+  downloadMbps: number | null,
+  uploadMbps: number | null
 ) {
   await pool.execute(
-    'INSERT INTO coleta_rede (id_maquina, latencia_ms, jitter_ms, perda_pct) VALUES (?, ?, ?, ?)',
-    [idMaquina, latenciaMs, jitterMs, perdaPct]
+    'INSERT INTO coleta_rede (id_maquina, latencia_ms, jitter_ms, perda_pct, download_mbps, upload_mbps) VALUES (?, ?, ?, ?, ?, ?)',
+    [idMaquina, latenciaMs, jitterMs, perdaPct, downloadMbps, uploadMbps]
   )
 }
 
@@ -66,12 +69,18 @@ async function salvarStatus(macAddress: string, status: Record<string, unknown>)
   const valor = JSON.stringify(status)
 
   await redis.set(chave, valor, 'EX', TTL_ONLINE_SEGUNDOS)
+
+  // Último IP conhecido, SEM expiração: o dashboard mostra como "Last received IP"
+  // quando a chave acima já expirou e a máquina está offline.
+  if (typeof status.ip === 'string') {
+    await redis.set(`device:lastip:${macAddress}`, status.ip)
+  }
 }
 
 
 export const app = new Elysia()
   .post('/api/v1/dispositivo/cadastro', async ({ body, set }) => {
-    const { macAddress, ipAddress, latenciaMs, jitterMs, perdaPct } = body
+    const { macAddress, ipAddress, latenciaMs, jitterMs, perdaPct, downloadMbps, uploadMbps } = body
 
     try {
 
@@ -85,13 +94,15 @@ export const app = new Elysia()
         }
       }
 
-      await salvarColeta(maquina.id, latenciaMs, jitterMs, perdaPct)
+      await salvarColeta(maquina.id, latenciaMs, jitterMs, perdaPct, downloadMbps, uploadMbps)
 
       await salvarStatus(maquina.macAddress, {
         ip: ipAddress,
         latenciaMs,
         jitterMs,
         perdaPct,
+        downloadMbps,
+        uploadMbps,
         ultimoContato: new Date().toISOString(),
       })
 
@@ -117,5 +128,7 @@ export const app = new Elysia()
       latenciaMs: t.Union([t.Number({ minimum: 0 }), t.Null()]),
       jitterMs: t.Union([t.Number({ minimum: 0 }), t.Null()]),
       perdaPct: t.Number({ minimum: 0, maximum: 100 }),
+      downloadMbps: t.Union([t.Number({ minimum: 0 }), t.Null()]),
+      uploadMbps: t.Union([t.Number({ minimum: 0 }), t.Null()]),
     }),
   })
